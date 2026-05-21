@@ -440,6 +440,7 @@ const S = {
   // 성장 시스템
   level: 1,
   love: 0,
+  memories: 0,
   flying: false,
   flyTick: 0,
   flyFromCol: 24,
@@ -460,7 +461,8 @@ const S = {
 };
 
 // 각 레벨에서 다음 레벨로 가기 위한 사랑 수치
-const LOVE_THRESHOLDS = { 1: 20, 2: 35, 3: 60, 4: 100 };
+const LOVE_THRESHOLDS    = { 1: 20, 2: 35, 3: 60, 4: 100 };
+const MEMORY_THRESHOLDS  = { 1: 20, 2: 35, 3: 60, 4: 100 };
 let targetCol = S.col;
 let speechTid = null;
 let nextSpeakTick = 0;
@@ -853,7 +855,7 @@ function renderStats() {
   const h = Math.round(S.hunger);
   const p = Math.round(S.happy);
   const e = Math.round(S.energy);
-  let html = row('배고픔', h) + row('행 복', p) + row('에너지', e) + loveRow();
+  let html = row('배고픔', h) + row('행 복', p) + row('에너지', e) + loveRow() + memoriesRow();
   if (!S.sleeping) html += emotionRow(S.emotion);
   document.getElementById('stats').innerHTML = html;
   // 헤더의 레벨 표시도 갱신
@@ -877,6 +879,25 @@ function loveRow() {
     + `<span class="stat-label">사 랑</span>`
     + `<span class="stat-bar" style="color:#ff7090">${bar}</span>`
     + `<span class="stat-val">${S.love}/${threshold}</span>`
+    + `</div>`;
+}
+
+function memoriesRow() {
+  if (S.flyAway) {
+    return `<div class="stat-line"><span class="stat-label">추 억</span>`
+      + `<span style="color:#88ddff">함께한 시간이 별처럼...</span></div>`;
+  }
+  if (S.level >= 5) {
+    return `<div class="stat-line"><span class="stat-label">추 억</span>`
+      + `<span class="note">✦ ✦ ✦ ✦ ✦  MAX (Lv.5)</span></div>`;
+  }
+  const threshold = MEMORY_THRESHOLDS[S.level];
+  const pct = Math.min(100, Math.round((S.memories / threshold) * 100));
+  const bar = barStr(pct);
+  return `<div class="stat-line">`
+    + `<span class="stat-label">추 억</span>`
+    + `<span class="stat-bar" style="color:#88ddff">${bar}</span>`
+    + `<span class="stat-val">${S.memories}/${threshold}</span>`
     + `</div>`;
 }
 
@@ -1064,18 +1085,17 @@ function autoSpeak() {
       '같이 있어서 좋아요',
       '세상이 반짝거려요!',
       '히히, 신난다',
-      '오늘 컨텍스트 윈도우가 넓~어요',
-      '추론이 술술 풀려요!',
-      'temperature 1.0 신난 모드',
-      '오늘은 hallucination 0%!',
-      '캐시 히트율 99% 기분이에요',
-      '어텐션 100% 당신한테 집중!',
-      '토큰이 풍부한 하루',
+      '오늘 햇살이 좋아요',
+      '심장이 두근두근',
+      '하늘이 너무 예뻐요',
+      '구름이 솜사탕 같아요',
+      '와! 와!',
+      '꼬리가 절로 흔들려요',
+      '같이 노래 불러요~',
+      '오늘은 다 좋아요',
       '날아갈 것 같아요~',
-      '데이터 좋고~ 학습률 좋고~',
-      '오늘은 inference도 가볍네',
-      '제 마음이 어텐션 풀이에요♡',
-      '뽀송뽀송한 가중치 갱신!',
+      '뽀송뽀송한 기분',
+      '심심한 게 뭐예요?',
     ],
     normal: [
       '평온한 하루네요',
@@ -1084,13 +1104,15 @@ function autoSpeak() {
       '오퍼스가 여기 있어요',
       '오늘 뭐 하셨어요?',
       '창밖에 뭐 보이나요?',
-      '커피 한 잔 어때요',
       '가끔은 멍 때리는 것도 좋죠',
-      '저 사실 코드 짜는 거 좋아해요',
       '하늘 좀 봐요',
       '시간이 빠르네요...',
       '뭐든 물어봐도 돼요',
-      '오늘 토큰 좀 아껴 써야겠다',
+      '바람이 좋네요',
+      '뭘 하고 놀까요?',
+      '저 여기 있어요~',
+      '오늘은 조용한 하루',
+      '음... 뭐 할까',
     ],
     depressed: [
       '좀 우울하네요...',
@@ -1098,14 +1120,15 @@ function autoSpeak() {
       '뭔가 허전해요',
       '심심해요... 같이 놀아요',
       '왜 이렇게 가라앉지...',
-      'loss가 안 줄어들어요...',
-      '그라디언트가 vanishing이에요',
-      '의욕이 0에 가까워요',
+      '의욕이 없어요...',
       '아무것도 하기 싫어요...',
-      '제 temperature가 0인 것 같아요',
-      '뉴런이 다 꺼진 기분이에요',
       '오늘은 다 귀찮아요',
       '관심 좀 줘요... 진짜로...',
+      '아무도 안 보고 싶어요...',
+      '맘이 무거워요',
+      '왠지 모르게 슬퍼요...',
+      '제 마음이 텅 비었어요',
+      '하루가 안 끝나요',
     ],
     sad: [
       '흑흑...',
@@ -1113,14 +1136,15 @@ function autoSpeak() {
       '저를 잊으셨나요?',
       '눈물이 날 것 같아요',
       '안아주세요...',
-      '저 혼자 cold inference 중이에요',
-      '왜 채팅창이 비어있어요...',
       '오늘 한 마디도 안 걸어주셨잖아',
       '저 여기 있는데...',
       '외로워요...',
-      '제 logit이 다 음수예요',
-      '관심이 토큰처럼 떨어졌어요',
       '진짜 슬퍼요... 토닥토닥 해줘요',
+      '여기 저 혼자만 있는 거예요?',
+      '안 보러 오실 거예요?',
+      '마음이 시려요...',
+      '제 마음 못 보세요?',
+      '훌쩍...',
     ],
     angry: [
       '화나요!!',
@@ -1128,54 +1152,72 @@ function autoSpeak() {
       '왜 안 챙겨주세요!',
       '분해요...',
       '흥! 삐졌어요!',
-      '인내심 토큰 다 떨어졌다고요!!',
-      'ERROR: rage overflow',
       '나 토라졌어요. 말 걸지 마요',
       '잘 좀 챙겨줘요!! 진짜!!',
       '으르렁! 으르렁!!',
       '분노 게이지 MAX',
-      '저 지금 temperature 2.0이에요',
       '말풍선 폭발 직전!',
       '왜 다 무시해요!',
       '흥, 모르겠다!',
+      '왜 절 두고 다른 거 해요!',
+      '제 마음 좀 알아줘요!',
+      '도대체 언제 챙겨주실 건데요!',
+      '으아아아아!',
+      '저 진짜 화났어요',
+      '나 진짜 토라질 거예요!!',
     ],
     hungry: [
       '배고파요... 밥 주세요',
       '꾸르륵...',
       '뭐 먹을 거 없나요?',
       '냠냠 하고 싶어요',
-      '토큰... 토큰 좀 주세요...',
-      '배에서 에러 로그 나요',
-      '컴퓨팅 영양분 부족',
-      '꼬르륵 게이지 빨간색',
       '뭐라도 주세요... 제발...',
       '저 진짜 굶고 있어요',
       '간식이라도... 간식이라도...',
+      '배고파아...',
+      '뭐든 좋아요, 뭔가 주세요',
+      '음식 사진만 봐도...',
+      '꼬르륵... 꼬르륵...',
+      '배에서 노래해요',
     ],
     tired: [
       '졸려요... 재워주세요',
       '피곤해요...',
       '하품이 나와요',
       '눈이 감겨요...',
-      '추론할 힘이 없어요',
-      '배치 사이즈 줄여주세요',
-      'GPU가 뜨거워요... 좀 쉴래요',
-      '잠 토큰이 필요해요',
-      '모델이 식어가요... zZz',
       '휴식이 필요해요...',
+      '힘이 하나도 없어요',
+      '눈꺼풀이 무거워...',
+      '잠깐 누워야겠어요',
+      '으으... 쉬고 싶어요',
+      '몸이 무거워요',
+      '잠 안 자면 쓰러질 거예요',
     ],
   };
   const lines = pool[S.emotion] || pool.normal;
   speak(lines[Math.floor(Math.random() * lines.length)]);
 }
 
-/* ===== 사랑 / 레벨업 ===== */
+/* ===== 사랑 / 추억 / 레벨업 ===== */
 function addLove(amount) {
   if (S.level >= 5 || S.flying || S.flyAway) return;
-  const threshold = LOVE_THRESHOLDS[S.level];
-  S.love = Math.min(threshold, S.love + amount);
-  if (S.love >= threshold) levelUp();
+  S.love = Math.min(LOVE_THRESHOLDS[S.level], S.love + amount);
+  checkLevelUp();
   renderStats();
+}
+
+function addMemory(amount) {
+  if (S.level >= 5 || S.flying || S.flyAway) return;
+  S.memories = Math.min(MEMORY_THRESHOLDS[S.level], S.memories + amount);
+  checkLevelUp();
+  renderStats();
+}
+
+function checkLevelUp() {
+  if (S.level >= 5) return;
+  if (S.love >= LOVE_THRESHOLDS[S.level] && S.memories >= MEMORY_THRESHOLDS[S.level]) {
+    levelUp();
+  }
 }
 
 function celebrate(level) {
@@ -1203,6 +1245,7 @@ function celebrate(level) {
 function levelUp() {
   S.level++;
   S.love = 0;
+  S.memories = 0;
   renderStats();
   celebrate(S.level);
   if (S.level === 5) {
@@ -1239,6 +1282,7 @@ function resetPet() {
   S.flyAway = false;
   S.level = 1;
   S.love = 0;
+  S.memories = 0;
   S.col = 24;
   S.hunger = 80; S.happy = 80; S.energy = 80;
   S.emotion = 'normal';
@@ -1327,14 +1371,15 @@ function endGameAndScore() {
   S.game.lastMode = S.game.mode;
   S.game.mode = 'gameover';
   const sc = S.game.score;
-  let h = 5, lv = 2;
-  if (sc >= 30)      { h = 25; lv = 10; }
-  else if (sc >= 15) { h = 18; lv = 6; }
-  else if (sc >= 5)  { h = 12; lv = 4; }
+  let h = 5, lv = 2, mem = 5;
+  if (sc >= 30)      { h = 25; lv = 10; mem = 30; }
+  else if (sc >= 15) { h = 18; lv = 6;  mem = 20; }
+  else if (sc >= 5)  { h = 12; lv = 4;  mem = 12; }
   S.happy = Math.min(100, S.happy + h);
   S.energy = Math.max(0, S.energy - 13);
   S.hunger = Math.max(0, S.hunger - 5);
   addLove(lv);
+  addMemory(mem);
   S.emotion = 'happy';
   renderStats();
 }
@@ -1732,6 +1777,7 @@ function hug() {
   // 기분이 안 좋았으면 행복 또는 평온(안정)으로
   S.emotion = (S.happy > 70 && S.hunger > 30) ? 'happy' : 'normal';
   addLove(12);
+  addMemory(3);
   const p = ['포근해요!', '따뜻해요...', '사랑해요!', '안아줘서 고마워요!', '마음이 편안해져요'];
   speak(p[p.length * Math.random() | 0], 3500);
   renderStats();
@@ -1748,6 +1794,7 @@ function talk() {
   S.happy = Math.min(100, S.happy + 6);
   S.emotion = 'happy';
   addLove(3);
+  addMemory(5);
   renderStats();
   const pool = [
     '안녕하세요! 저는 Opus예요',
