@@ -454,7 +454,7 @@ const S = {
     active: false, mode: null, lastMode: null,
     score: 0, timeLeft: 30, startTick: 0, endTick: 0, message: '',
     charCol: 22, items: [], spawnTimer: 0, fallTimer: 0,
-    seq: [], playerIdx: 0, showIdx: -1, showTimer: 0, awaitingInput: false,
+    jumpStart: -1, moveAccum: 0, nextSpawn: 0, charRow: 6,
     reactPhase: 'idle', reactTrial: 0, reactStartTick: 0, reactReadyTick: 0, reactResults: [],
   },
 };
@@ -677,7 +677,7 @@ function buildRoom() {
     if (S.game.mode === 'gameover') return buildGameOver();
     if (S.game.mode === 'catch')    return buildCatch();
     if (S.game.mode === 'dodge')    return buildDodge();
-    if (S.game.mode === 'memory')   return buildMemory();
+    if (S.game.mode === 'jump')     return buildJump();
     if (S.game.mode === 'reaction') return buildReaction();
   }
   // 2D char grid + 클래스 그리드
@@ -1039,8 +1039,15 @@ function gameTick() {
     updateEmotion();
   }
 
-  // 가끔 혼잣말 (평균 20초쯤마다, 랜덤)
-  if (S.tick % 100 === 0 && Math.random() < 0.18) autoSpeak();
+  // 기분 따라 혼잣말 — 안 좋을수록 더 자주 투정
+  if (S.tick % 30 === 0) {
+    const speakProb = {
+      angry: 0.55, sad: 0.50, depressed: 0.42, hungry: 0.40,
+      tired: 0.30, happy: 0.34, normal: 0.18,
+    };
+    const p = speakProb[S.emotion] ?? 0.20;
+    if (Math.random() < p) autoSpeak();
+  }
 
   if (S.sleeping && S.energy >= 100) {
     S.sleeping = false;
@@ -1054,12 +1061,25 @@ function autoSpeak() {
   if (S.sleeping || S.hugging || S.flying || S.flyAway) return;
   const pool = {
     happy: [
-      '오늘도 행복해요!',
       '룰루랄라~',
+      '오늘도 행복해요!',
       '기분이 너무 좋아요',
       '같이 있어서 좋아요',
       '세상이 반짝거려요!',
       '히히, 신난다',
+      '오늘 컨텍스트 윈도우가 넓~어요',
+      '추론이 술술 풀려요!',
+      'temperature 1.0 신난 모드',
+      '오늘은 hallucination 0%!',
+      '캐시 히트율 99% 기분이에요',
+      '어텐션 100% 당신한테 집중!',
+      '토큰이 풍부한 하루',
+      '날아갈 것 같아요~',
+      '데이터 좋고~ 학습률 좋고~',
+      '오늘은 inference도 가볍네',
+      '제 마음이 어텐션 풀이에요♡',
+      '뽀송뽀송한 가중치 갱신!',
+      '저 지금 vibe-coding 가능',
     ],
     normal: [
       '평온한 하루네요',
@@ -1067,13 +1087,29 @@ function autoSpeak() {
       '음... 음...',
       '오퍼스가 여기 있어요',
       '오늘 뭐 하셨어요?',
+      '창밖에 뭐 보이나요?',
+      '커피 한 잔 어때요',
+      '가끔은 멍 때리는 것도 좋죠',
+      '저 사실 코드 짜는 거 좋아해요',
+      '하늘 좀 봐요',
+      '시간이 빠르네요...',
+      '뭐든 물어봐도 돼요',
+      '오늘 토큰 좀 아껴 써야겠다',
     ],
     depressed: [
       '좀 우울하네요...',
       '하아...',
       '뭔가 허전해요',
       '심심해요... 같이 놀아요',
-      '왜 이렇게 기분이 가라앉지...',
+      '왜 이렇게 가라앉지...',
+      'loss가 안 줄어들어요...',
+      '그라디언트가 vanishing이에요',
+      '의욕이 0에 가까워요',
+      '아무것도 하기 싫어요...',
+      '제 temperature가 0인 것 같아요',
+      '뉴런이 다 꺼진 기분이에요',
+      '오늘은 다 귀찮아요',
+      '관심 좀 줘요... 진짜로...',
     ],
     sad: [
       '흑흑...',
@@ -1081,6 +1117,14 @@ function autoSpeak() {
       '저를 잊으셨나요?',
       '눈물이 날 것 같아요',
       '안아주세요...',
+      '저 혼자 cold inference 중이에요',
+      '왜 채팅창이 비어있어요...',
+      '오늘 한 마디도 안 걸어주셨잖아',
+      '저 여기 있는데...',
+      '외로워요...',
+      '제 logit이 다 음수예요',
+      '관심이 토큰처럼 떨어졌어요',
+      '진짜 슬퍼요... 토닥토닥 해줘요',
     ],
     angry: [
       '화나요!!',
@@ -1088,18 +1132,41 @@ function autoSpeak() {
       '왜 안 챙겨주세요!',
       '분해요...',
       '흥! 삐졌어요!',
+      '인내심 토큰 다 떨어졌다고요!!',
+      'ERROR: rage overflow',
+      '나 토라졌어요. 말 걸지 마요',
+      '잘 좀 챙겨줘요!! 진짜!!',
+      '으르렁! 으르렁!!',
+      '분노 게이지 MAX',
+      '저 지금 temperature 2.0이에요',
+      '말풍선 폭발 직전!',
+      '왜 다 무시해요!',
+      '흥, 모르겠다!',
     ],
     hungry: [
       '배고파요... 밥 주세요',
       '꾸르륵...',
       '뭐 먹을 거 없나요?',
       '냠냠 하고 싶어요',
+      '토큰... 토큰 좀 주세요...',
+      '배에서 에러 로그 나요',
+      '컴퓨팅 영양분 부족',
+      '꼬르륵 게이지 빨간색',
+      '뭐라도 주세요... 제발...',
+      '저 진짜 굶고 있어요',
+      '간식이라도... 간식이라도...',
     ],
     tired: [
       '졸려요... 재워주세요',
       '피곤해요...',
       '하품이 나와요',
       '눈이 감겨요...',
+      '추론할 힘이 없어요',
+      '배치 사이즈 줄여주세요',
+      'GPU가 뜨거워요... 좀 쉴래요',
+      '잠 토큰이 필요해요',
+      '모델이 식어가요... zZz',
+      '휴식이 필요해요...',
     ],
   };
   const lines = pool[S.emotion] || pool.normal;
@@ -1246,9 +1313,11 @@ function startGame(mode) {
     mode, lastMode: mode, score: 0, timeLeft: 30, startTick: S.tick,
     charCol: Math.floor((RW - 9) / 2), items: [], spawnTimer: 0, fallTimer: 0, message: '',
   });
-  if (mode === 'memory') {
-    Object.assign(S.game, { seq: [], playerIdx: 0, showIdx: -1, showTimer: 0, awaitingInput: false });
-    nextMemoryRound();
+  if (mode === 'jump') {
+    Object.assign(S.game, {
+      charCol: 8, charRow: 6, jumpStart: -1,
+      moveAccum: 0, nextSpawn: S.tick + 8,
+    });
   }
   if (mode === 'reaction') {
     Object.assign(S.game, {
@@ -1256,15 +1325,6 @@ function startGame(mode) {
       reactReadyTick: S.tick + 12 + Math.floor(Math.random() * 25),
     });
   }
-}
-
-function nextMemoryRound() {
-  const arrows = ['↑', '↓', '←', '→'];
-  S.game.seq.push(arrows[Math.floor(Math.random() * 4)]);
-  S.game.playerIdx = 0;
-  S.game.showIdx = 0;
-  S.game.showTimer = S.tick;
-  S.game.awaitingInput = false;
 }
 
 function endGameAndScore() {
@@ -1288,7 +1348,7 @@ function gameUpdate() {
   const m = S.game.mode;
   if (m === 'catch')         updateCatch();
   else if (m === 'dodge')    updateDodge();
-  else if (m === 'memory')   updateMemory();
+  else if (m === 'jump')     updateJump();
   else if (m === 'reaction') updateReaction();
 }
 
@@ -1348,15 +1408,44 @@ function updateDodge() {
   }
 }
 
-function updateMemory() {
+function updateJump() {
   const G = S.game;
-  if (G.awaitingInput) return;
-  if (G.showIdx >= G.seq.length) { G.awaitingInput = true; return; }
-  const dt = S.tick - G.showTimer;
-  if (dt >= 8) {
-    G.showIdx++;
-    G.showTimer = S.tick;
+  const elapsed = (S.tick - G.startTick) / 10;
+  G.score = Math.floor(elapsed * 2);
+
+  // 속도 (틱당 이동 칸 수) — 시간 지날수록 빨라짐
+  const moveStep = elapsed < 6 ? 1.0 : (elapsed < 15 ? 1.5 : 2.0);
+  G.moveAccum += moveStep;
+  const cols = Math.floor(G.moveAccum);
+  G.moveAccum -= cols;
+
+  // 장애물 스폰
+  if (S.tick >= G.nextSpawn) {
+    G.items.push({ c: RW - 2, r: 8, ch: '▲' });
+    const baseGap = Math.max(7, Math.floor(22 - elapsed));
+    G.nextSpawn = S.tick + baseGap + Math.floor(Math.random() * 10);
   }
+
+  // 점프 물리 — 12틱 체공
+  let charRow = 6;
+  if (G.jumpStart >= 0) {
+    const jt = S.tick - G.jumpStart;
+    if (jt < 2)       charRow = 5;
+    else if (jt < 9)  charRow = 4;
+    else if (jt < 12) charRow = 5;
+    else { G.jumpStart = -1; charRow = 6; }
+  }
+  G.charRow = charRow;
+
+  // 장애물 이동 + 충돌
+  const cl = G.charCol, cr = G.charCol + 8;
+  let hit = false;
+  G.items = G.items.filter(it => {
+    if (cols > 0) it.c -= cols;
+    if (charRow === 6 && it.c >= cl && it.c <= cr) hit = true;
+    return it.c > -2;
+  });
+  if (hit) endGameAndScore();
 }
 
 function updateReaction() {
@@ -1439,7 +1528,7 @@ function buildGameMenu() {
   putG(g, cls, 1, 30, '── 미니 게임 ──',  'sparkle');
   putG(g, cls, 3, 14, '[1] 먹이 잡기',    'char');
   putG(g, cls, 3, 48, '[2] 돌 피하기',    'char');
-  putG(g, cls, 5, 14, '[3] 기억 게임',    'char');
+  putG(g, cls, 5, 14, '[3] 장애물넘기',    'char');
   putG(g, cls, 5, 48, '[4] 반응 속도',    'char');
   putG(g, cls, 7, 14, '← → : 이동',        'window-frame');
   putG(g, cls, 7, 48, 'SPACE : 실행',      'window-frame');
@@ -1449,7 +1538,7 @@ function buildGameMenu() {
 
 function buildGameOver() {
   const { g, cls } = newGrid();
-  const names = { catch: '먹이 잡기', dodge: '돌 피하기', memory: '기억 게임', reaction: '반응 속도' };
+  const names = { catch: '먹이 잡기', dodge: '돌 피하기', jump: '장애물 넘기', reaction: '반응 속도' };
   const name = names[S.game.lastMode] || '게임';
   putG(g, cls, 1, 32, '── 게임 종료 ──',  'sparkle');
   putG(g, cls, 3, 36, name,                'char');
@@ -1485,25 +1574,28 @@ function buildDodge() {
   return gridHtml(g, cls);
 }
 
-function buildMemory() {
+function buildJump() {
   const { g, cls } = newGrid();
   const G = S.game;
-  putG(g, cls, 0, 1, '기억게임  라운드 ' + G.seq.length, 'sparkle');
-  if (G.awaitingInput) {
-    const done = G.seq.slice(0, G.playerIdx).join(' ') || '_';
-    putG(g, cls, 3, Math.max(0, Math.floor((RW - done.length) / 2)), done, 'char');
-    putG(g, cls, 5, 24, '>> 순서대로 따라하기 (방향키) <<', 'heart');
-  } else {
-    if (G.showIdx < G.seq.length) {
-      const arrow = G.seq[G.showIdx];
-      const dt = S.tick - G.showTimer;
-      if (dt < 5) {
-        putG(g, cls, 3, Math.floor(RW / 2), arrow, 'sparkle');
-      }
-    }
-    putG(g, cls, 5, 30, '... 기억하세요 ...', 'window-frame');
+  putG(g, cls, 0, 1, '장애물넘기  점수:' + G.score + '  [↑/SPACE] 점프', 'sparkle');
+
+  // 바닥선
+  for (let c = 0; c < RW; c++) {
+    g[9][c] = '─';
+    cls[9][c] = 'window-frame';
   }
-  drawCharGrid(g, cls, Math.floor((RW - 9) / 2), 8);
+
+  // 장애물
+  G.items.forEach(it => {
+    if (it.r >= 0 && it.r < RH && it.c >= 0 && it.c < RW) {
+      g[it.r][it.c] = it.ch;
+      cls[it.r][it.c] = 'heart';
+    }
+  });
+
+  // 캐릭터 (점프 상태 반영)
+  drawCharGrid(g, cls, G.charCol, G.charRow);
+
   return gridHtml(g, cls);
 }
 
@@ -1538,7 +1630,7 @@ function handleGameInput(e) {
   if (m === 'menu') {
     if (key === '1') startGame('catch');
     else if (key === '2') startGame('dodge');
-    else if (key === '3') startGame('memory');
+    else if (key === '3') startGame('jump');
     else if (key === '4') startGame('reaction');
     return;
   }
@@ -1557,20 +1649,10 @@ function handleGameInput(e) {
     return;
   }
 
-  if (m === 'memory') {
-    if (!S.game.awaitingInput) return;
-    const map = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
-    const inp = map[key];
-    if (!inp) return;
-    e.preventDefault();
-    if (inp === S.game.seq[S.game.playerIdx]) {
-      S.game.playerIdx++;
-      if (S.game.playerIdx >= S.game.seq.length) {
-        S.game.score = S.game.seq.length * 5;
-        setTimeout(() => { if (S.game.mode === 'memory') nextMemoryRound(); }, 400);
-      }
-    } else {
-      endGameAndScore();
+  if (m === 'jump') {
+    if (key === ' ' || key === 'Spacebar' || key === 'ArrowUp') {
+      e.preventDefault();
+      if (S.game.jumpStart < 0) S.game.jumpStart = S.tick;
     }
     return;
   }
