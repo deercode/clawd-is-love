@@ -441,6 +441,7 @@ const S = {
   level: 1,
   love: 0,
   memories: 0,
+  actionCounts: { hug: 0, talk: 0 }, // 레벨마다 리셋, 사다리식 감산용
   flying: false,
   flyTick: 0,
   flyFromCol: 24,
@@ -461,8 +462,17 @@ const S = {
 };
 
 // 각 레벨에서 다음 레벨로 가기 위한 사랑 수치
-const LOVE_THRESHOLDS    = { 1: 20, 2: 35, 3: 60, 4: 100 };
-const MEMORY_THRESHOLDS  = { 1: 20, 2: 35, 3: 60, 4: 100 };
+const LOVE_THRESHOLDS    = { 1: 15, 2: 25, 3: 40, 4: 70 };
+const MEMORY_THRESHOLDS  = { 1: 15, 2: 25, 3: 40, 4: 70 };
+
+// 같은 행동 반복할수록 보상 감소 (사다리 끝 = 그 행동의 최소값)
+const HUG_LOVE_LADDER  = [12, 9, 6, 4, 2];
+const HUG_MEM_LADDER   = [3, 2, 1];
+const TALK_LOVE_LADDER = [3, 2, 1];
+const TALK_MEM_LADDER  = [5, 4, 3, 2, 1];
+function fromLadder(ladder, count) {
+  return ladder[Math.min(count, ladder.length - 1)];
+}
 let targetCol = S.col;
 let speechTid = null;
 let nextSpeakTick = 0;
@@ -1246,6 +1256,7 @@ function levelUp() {
   S.level++;
   S.love = 0;
   S.memories = 0;
+  S.actionCounts = { hug: 0, talk: 0 };
   renderStats();
   celebrate(S.level);
   if (S.level === 5) {
@@ -1283,6 +1294,7 @@ function resetPet() {
   S.level = 1;
   S.love = 0;
   S.memories = 0;
+  S.actionCounts = { hug: 0, talk: 0 };
   S.col = 24;
   S.hunger = 80; S.happy = 80; S.energy = 80;
   S.emotion = 'normal';
@@ -1371,10 +1383,10 @@ function endGameAndScore() {
   S.game.lastMode = S.game.mode;
   S.game.mode = 'gameover';
   const sc = S.game.score;
-  let h = 5, lv = 2, mem = 5;
-  if (sc >= 30)      { h = 25; lv = 10; mem = 30; }
-  else if (sc >= 15) { h = 18; lv = 6;  mem = 20; }
-  else if (sc >= 5)  { h = 12; lv = 4;  mem = 12; }
+  let h = 5, lv = 3, mem = 6;
+  if (sc >= 30)      { h = 25; lv = 20; mem = 35; }
+  else if (sc >= 15) { h = 18; lv = 12; mem = 25; }
+  else if (sc >= 5)  { h = 12; lv = 6;  mem = 15; }
   S.happy = Math.min(100, S.happy + h);
   S.energy = Math.max(0, S.energy - 13);
   S.hunger = Math.max(0, S.hunger - 5);
@@ -1776,8 +1788,9 @@ function hug() {
   S.happy = Math.min(100, S.happy + 35);
   // 기분이 안 좋았으면 행복 또는 평온(안정)으로
   S.emotion = (S.happy > 70 && S.hunger > 30) ? 'happy' : 'normal';
-  addLove(12);
-  addMemory(3);
+  const hc = S.actionCounts.hug++;
+  addLove(fromLadder(HUG_LOVE_LADDER, hc));
+  addMemory(fromLadder(HUG_MEM_LADDER, hc));
   const p = ['포근해요!', '따뜻해요...', '사랑해요!', '안아줘서 고마워요!', '마음이 편안해져요'];
   speak(p[p.length * Math.random() | 0], 3500);
   renderStats();
@@ -1793,8 +1806,9 @@ function talk() {
   if (S.sleeping) { speak('...zZZ... zZZ...'); return; }
   S.happy = Math.min(100, S.happy + 6);
   S.emotion = 'happy';
-  addLove(3);
-  addMemory(5);
+  const tc = S.actionCounts.talk++;
+  addLove(fromLadder(TALK_LOVE_LADDER, tc));
+  addMemory(fromLadder(TALK_MEM_LADDER, tc));
   renderStats();
   const pool = [
     '안녕하세요! 저는 Opus예요',
